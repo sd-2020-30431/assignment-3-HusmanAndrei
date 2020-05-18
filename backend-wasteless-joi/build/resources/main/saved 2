@@ -1,0 +1,3 @@
+spring.datasource.url=jdbc:mysql://remotemysql.com/rLJnFYGLbb
+spring.datasource.username=rLJnFYGLbb
+spring.datasource.password=CJmeW9fn1q
