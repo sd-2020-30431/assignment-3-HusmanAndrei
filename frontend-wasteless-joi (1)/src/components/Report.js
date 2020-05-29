@@ -5,6 +5,8 @@ import CardActions from '@material-ui/core/CardActions';
 import CardContent from '@material-ui/core/CardContent';
 import Button from '@material-ui/core/Button';
 import Typography from '@material-ui/core/Typography';
+import IdealReportDecorator from './decorators/IdealReportDecorator';
+import BadReportDecorator from './decorators/BadReportDecorator';
 
 const styles = {
     root: {
@@ -28,6 +30,14 @@ const styles = {
 export default class Report extends React.Component {
 
 
+    chooseReport(value){
+        if (value < 200){
+            return <IdealReportDecorator value={value}/>
+        }
+        else{
+            return <BadReportDecorator value={value}/>
+        }
+    }
 
     render() {
 
@@ -44,16 +54,16 @@ export default class Report extends React.Component {
                         Waste management
                     </Typography>
                     <Typography style={styles.pos} color="textSecondary">
-                        Calories wasted this month: {monthCalories}
+                        Calories wasted this month: {this.chooseReport(monthCalories)}
                     </Typography>
                     <Typography style={styles.pos} color="textSecondary">
-                        Calories wasted this week: {weekCalories}
+                        Calories wasted this week: {this.chooseReport(weekCalories)}
                     </Typography>
                     <Typography style={styles.pos} color="textSecondary">
-                        Quantity wasted this month: {monthQuantity}
+                        Quantity wasted this month: {this.chooseReport(monthQuantity)}
                     </Typography>
                     <Typography style={styles.pos} color="textSecondary">
-                        Quantity wasted this week: {weekQuantity}
+                        Quantity wasted this week: {this.chooseReport(weekQuantity)}
                     </Typography>
 
                 </CardContent>
