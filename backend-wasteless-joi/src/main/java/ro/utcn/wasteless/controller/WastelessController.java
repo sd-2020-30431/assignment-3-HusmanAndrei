@@ -17,6 +17,15 @@ import ro.utcn.wasteless.domain.User;
 import ro.utcn.wasteless.dto.GroceryItemDto;
 import ro.utcn.wasteless.dto.UserDto;
 import ro.utcn.wasteless.dto.reports.ReportDto;
+import ro.utcn.wasteless.mediator.Handler;
+import ro.utcn.wasteless.mediator.Mediator;
+import ro.utcn.wasteless.mediator.command.AddGrocery;
+import ro.utcn.wasteless.mediator.command.DeleteItem;
+import ro.utcn.wasteless.mediator.command.LoginUser;
+import ro.utcn.wasteless.mediator.handler.*;
+import ro.utcn.wasteless.mediator.query.GetItemsByUserQuery;
+import ro.utcn.wasteless.mediator.query.GetUserId;
+import ro.utcn.wasteless.mediator.response.*;
 import ro.utcn.wasteless.observer.DateChangeObservable;
 import ro.utcn.wasteless.observer.notifier.NotifyService;
 import ro.utcn.wasteless.report.FactoryProvider;
@@ -34,8 +43,9 @@ import java.util.*;
 @RestController
 public class WastelessController {
 
+
     @Autowired
-    WastelessService service;
+    Mediator mediator;
 
     @Autowired
     UserConverter userConverter;
@@ -53,21 +63,22 @@ public class WastelessController {
     DateChangeObservable dateChangeObservable;
 
 
-
-
-
     private Date currentDate = new Date();
 
-    @PostMapping("/user")
-    public UserDto createUser(@RequestBody UserDto userDto){
-        User user = userConverter.convertToModel(userDto);
-        user = service.saveUser(user);
-        return userConverter.convertToDto(user);
-    }
+//    @PostMapping("/user")
+//    public UserDto createUser(@RequestBody UserDto userDto){
+//        //Utilitar, nefolosit de app. Folosit din Postman.
+//        User user = userConverter.convertToModel(userDto);
+//        user = service.saveUser(user);
+//        return userConverter.convertToDto(user);
+//    }
 
     @PostMapping("/login")
     public UserDto loginUser(@RequestBody UserDto userInfo){
-        Optional<User> user = service.getUser(userInfo.getName(), userInfo.getPassword());
+        System.out.println(userInfo.toString());
+        LoginUser loginUser = new LoginUser(userInfo.getName(), userInfo.getPassword());
+        LoginUserHandler loginUserHandler = (LoginUserHandler)mediator.<LoginUser, LoginUserResponse>getHandler(loginUser);
+        Optional<User> user = loginUserHandler.handle(loginUser).getUserOptional();
         if(user.isEmpty()){
             return userInfo;
         }
@@ -83,7 +94,10 @@ public class WastelessController {
 
     private Optional<User> getUser(String stringId){
         Long id = getUserId(stringId);
-        return service.getUserById(id);
+        GetUserId getUserId = new GetUserId(id);
+        GetUserIdHandler getItemsByUserHandler = (GetUserIdHandler) mediator.<GetUserId, GetUserIdResponse>getHandler(getUserId);
+        GetUserIdResponse userIdResponse = getItemsByUserHandler.handle(getUserId);
+        return userIdResponse.getUserOptional();
     }
 
     @PostMapping("/grocery")
@@ -93,7 +107,11 @@ public class WastelessController {
         if(user.isEmpty()){
             return null;
         }
-        return groceryItemConverter.convertToDto(service.addGrocery(item, user.get()));
+        AddGrocery addGrocery = new AddGrocery(item, user.get());
+        AddGroceryHandler addGroceryHandler = (AddGroceryHandler)(mediator.<AddGrocery, AddGroceryResponse>getHandler(addGrocery));
+        AddGroceryResponse addGroceryResponse = addGroceryHandler.handle(addGrocery);
+        return groceryItemConverter.convertToDto(addGroceryResponse.getGroceryItem());
+
     }
 
 
@@ -103,6 +121,7 @@ public class WastelessController {
 
     @GetMapping("/stats/weekly")
     public int getWeekly(@RequestParam boolean toCaloric, @RequestHeader(name="Authorization") String stringId){
+        //Report -> uses the abstract factory, no need of mediation
         ReportAbstractFactory abstractFactory = factoryProvider.getFactory(toCaloric);
         WeeklyReport weeklyReport = abstractFactory.getWeeklyReport();
         Optional<User> userOptional = getUser(stringId);
@@ -112,6 +131,7 @@ public class WastelessController {
         return weeklyReport.getTotalByWeek(currentDate, userOptional.get());
     }
     @GetMapping("/stats/monthly")
+    //Report -> uses the abstract factory, no need of mediation
     public int getMonthly(@RequestParam boolean toCaloric,  @RequestHeader(name="Authorization") String stringId){
         ReportAbstractFactory abstractFactory = factoryProvider.getFactory(toCaloric);
         MonthlyReport monthlyReport = abstractFactory.getMonthlyReport();
@@ -124,6 +144,7 @@ public class WastelessController {
 
     @GetMapping("/stats/all")
     public ReportDto getAllReports(@RequestHeader(name="Authorization") String stringId){
+        //Report -> uses the abstract factory, no need of mediation
         Optional<User> user = getUser(stringId);
         if(user.isEmpty()){
             return null;
@@ -135,11 +156,12 @@ public class WastelessController {
 
     @GetMapping("/grocery")
     public List<GroceryItemDto> getItemsByUser(@RequestHeader(name="Authorization") String stringId){
-        Optional<User> user = getUser(stringId);
-        if(user.isEmpty()){
-            return null;
-        }
-        List<GroceryItemDto> items = groceryItemConverter.convertAllToDtos(service.getItemsByUser(user.get()));
+        Long userId = getUserId(stringId);
+        GetItemsByUserQuery getItemsByUserQuery = new GetItemsByUserQuery(userId);
+        GetItemsByUserHandler handler = (GetItemsByUserHandler) mediator.<GetItemsByUserQuery, GetItemsByUserResponse>getHandler(getItemsByUserQuery);
+        GetItemsByUserResponse response = handler.handle(getItemsByUserQuery);
+
+        List<GroceryItemDto> items = groceryItemConverter.convertAllToDtos(response.getGroceryItems());
         return items;
     }
 
@@ -147,6 +169,7 @@ public class WastelessController {
 
     @GetMapping("/report")
     public Object getInvalidUsers(){
+        //Reports, no need of mediator
         Map<User, Map<Date, Integer>> stat = notifyService.getNonIdealUsersByBurndownRate(currentDate);
         Map<UserDto, Map<Date, Integer>> dtoStat = new HashMap<>();
         stat.keySet().forEach(key -> {
@@ -159,7 +182,10 @@ public class WastelessController {
 
     @DeleteMapping("/donate")
     public GroceryItemDto donateItem(@RequestParam Long itemId, @RequestHeader(name="Authorization")String stringId){
-        Optional<GroceryItem> item = service.deleteItem(itemId);
+        DeleteItem deleteItem = new DeleteItem(itemId);
+        DeleteItemHandler deleteItemHandler = (DeleteItemHandler) mediator.<DeleteItem, DeleteItemResponse>getHandler(deleteItem);
+        DeleteItemResponse deleteItemResponse = deleteItemHandler.handle(deleteItem);
+        Optional<GroceryItem> item = deleteItemResponse.getGroceryItem();
         if(item.isEmpty()){
             return null;
         }
